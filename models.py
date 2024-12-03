@@ -1,19 +1,20 @@
 import numpy as np
 import pandas as pd
 from sklearn.svm import SVC
-from sklearn.linear_model import LogisticRegression  # Add this import
+from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import (
     RandomForestClassifier,
     ExtraTreesClassifier,
     AdaBoostClassifier,
     StackingClassifier
 )
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from xgboost import XGBClassifier
 import lightgbm as lgb
 from catboost import CatBoostClassifier
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, label_binarize
 from sklearn.metrics import (
     accuracy_score,
     precision_recall_fscore_support,
@@ -146,7 +147,15 @@ class ModelEvaluator:
         # Define meta-classifier for stacking
         meta_classifier = LogisticRegression(random_state=42)
 
-        # Define all models
+        # Optimized AdaBoost base estimator
+        ada_base_estimator = DecisionTreeClassifier(
+            max_depth=3,
+            min_samples_split=5,
+            min_samples_leaf=2,
+            random_state=42
+        )
+
+        # Define all models with optimized parameters
         models = {
             'SVM': SVC(kernel='rbf', C=1.0, probability=True, random_state=42),
             'Random Forest': RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42),
@@ -156,7 +165,13 @@ class ModelEvaluator:
             'CatBoost': CatBoostClassifier(iterations=100, depth=5, learning_rate=0.1, random_seed=42, verbose=False),
             'Extra Trees': ExtraTreesClassifier(n_estimators=100, max_depth=10, random_state=42),
             'KNN': KNeighborsClassifier(n_neighbors=5, weights='distance'),
-            'AdaBoost': AdaBoostClassifier(n_estimators=100, random_state=42),
+            'AdaBoost': AdaBoostClassifier(
+                base_estimator=ada_base_estimator,
+                n_estimators=200,
+                learning_rate=0.05,
+                algorithm='SAMME.R',
+                random_state=42
+            ),
             'Stacking': StackingClassifier(
                 estimators=base_models,
                 final_estimator=meta_classifier,
@@ -171,6 +186,7 @@ class ModelEvaluator:
             except Exception as e:
                 print(f"Skipping {name} due to error: {str(e)}")
                 continue
+
     def _print_results(self, model_name):
         """Print comprehensive results"""
         result = self.results[model_name]
@@ -216,18 +232,17 @@ class ModelEvaluator:
         metrics = self.results[model_name]['metrics']['per_class']
         classes = self.label_encoder.classes_
 
-        # Create figure with 3 subplots
         fig, axes = plt.subplots(3, 1, figsize=(15, 15))
         fig.suptitle(f'Per-class Performance Metrics - {model_name}')
 
-        # Plot precision, recall, and F1 separately
         for idx, (metric_name, metric_values) in enumerate([
             ('Precision', metrics['precision']),
             ('Recall', metrics['recall']),
             ('F1-Score', metrics['f1'])
         ]):
-            axes[idx].bar(classes, metric_values)
+            axes[idx].bar(range(len(classes)), metric_values)
             axes[idx].set_title(f'Per-class {metric_name}')
+            axes[idx].set_xticks(range(len(classes)))
             axes[idx].set_xticklabels(classes, rotation=45, ha='right')
             axes[idx].set_ylim(0, 1)
 
@@ -249,13 +264,13 @@ class ModelEvaluator:
             'CV Score': [self.results[m]['cv_scores'].mean() for m in models]
         }
 
-        # Create 2x2 subplot
         fig, axes = plt.subplots(2, 2, figsize=(15, 12))
         fig.suptitle('Model Performance Comparison')
 
         for (metric_name, metric_values), ax in zip(metrics.items(), axes.ravel()):
-            ax.bar(models, metric_values)
+            ax.bar(range(len(models)), metric_values)
             ax.set_title(f'{metric_name} Comparison')
+            ax.set_xticks(range(len(models)))
             ax.set_xticklabels(models, rotation=45, ha='right')
 
             # Add value labels on top of bars
