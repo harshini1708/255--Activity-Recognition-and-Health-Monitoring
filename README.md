@@ -21,8 +21,6 @@ Additionally, individual models were evaluated to ensure the stacking approach p
 The stacking model achieved the highest accuracy of 99.74%, making it ideal for real-world applications.
 
 
-# Requirements
-    ! pip install -r requirements.txt
 # Usage
 ### Data Preparation
     data/
